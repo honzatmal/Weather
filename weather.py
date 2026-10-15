@@ -17,7 +17,7 @@ def get_weather_data():
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     res = requests.get(url).json()
     
-    # 2. 5일/3시간 단위 예보 API (오늘 하루 전체 최저/최고 기온 계산용)
+    # 2. 5일/3시간 단위 예보 API (오늘 하루 전체 최저/최고 기온 및 시간대별 예보용)
     forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     forecast_res = requests.get(forecast_url).json()
 
@@ -26,6 +26,47 @@ def get_weather_data():
     air_res = requests.get(air_url).json()
 
     return res, forecast_res, air_res
+
+def get_detailed_time_forecast(forecast_list, target_hour):
+    """지정한 시간대와 가장 가까운 예보를 찾아 체감온도, 기온, 하늘상태, 강수확률 및 가이드를 반환"""
+    KST = timezone(timedelta(hours=9))
+    today_str = datetime.now(KST).strftime("%Y-%m-%d")
+    
+    selected_item = None
+    min_diff = 999
+    
+    for item in forecast_list:
+        item_time = datetime.fromtimestamp(item['dt'], timezone.utc).astimezone(KST)
+        if item_time.strftime("%Y-%m-%d") == today_str:
+            diff = abs(item_time.hour - target_hour)
+            if diff < min_diff:
+                min_diff = diff
+                selected_item = item
+
+    if not selected_item:
+        return "정보 없음"
+
+    temp = selected_item['main']['temp']
+    feels_like = selected_item['main']['feels_like']
+    pop = int(selected_item.get('pop', 0) * 100)
+    weather_desc = selected_item['weather'][0]['description']
+    sky = selected_item['weather'][0]['main']
+    
+    # 날씨 이모지
+    icon = "☀️" if sky == "Clear" else "☁️" if sky == "Clouds" else "🌧️" if sky == "Rain" else "⛅"
+    
+    # 간단한 행동 가이드 팁 생성
+    tip = ""
+    if pop >= 50:
+        tip = " — ☂️ 우산 챙기세요"
+    elif temp < 15:
+        tip = " — 🧥 겉옷 필수"
+    elif temp > 26:
+        tip = " — 🕶️ 더위 주의"
+    else:
+        tip = " — ✨ 활동하기 좋아요"
+
+    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C) | 강수 {pop}%{tip}"
 
 def format_message(current, forecast, air):
     # 시간 설정 (KST 기준)
@@ -39,24 +80,21 @@ def format_message(current, forecast, air):
     weather_desc = current['weather'][0]['description']
     temp = current['main']['temp']
     
-    # [수정] 오늘 하루 3시간 간격 예보 데이터에서 정확한 최저/최고 기온 추출
+    # 오늘 하루 3시간 간격 예보 데이터에서 정확한 최저/최고 기온 추출
     today_temps = []
     for item in forecast.get('list', []):
-        # 데이터의 UTC 시간을 KST로 변환하여 오늘 날짜에 해당하는 항목만 골라냄
         item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
         item_time_kst = item_time_utc.astimezone(KST)
         
         if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
             today_temps.append(item['main']['temp_min'])
             today_temps.append(item['main']['temp_max'])
-            # 각 시간대별 대표 기온도 포함해서 정확도 높임
             today_temps.append(item['main']['temp'])
 
     if today_temps:
         temp_min = min(today_temps)
         temp_max = max(today_temps)
     else:
-        # 혹시 데이터가 없을 경우 현재 기온 기반 대체
         temp_min = current['main']['temp_min']
         temp_max = current['main']['temp_max']
 
@@ -80,7 +118,12 @@ def format_message(current, forecast, air):
     aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
     dust_status = aqi_text_map.get(aqi, "보통")
 
-    # 메시지 조합 (최저/최고 순서 반영)
+    # 시간대별 상세 정보 생성 (아침 8시, 점심 13시, 저녁 18시 기준)
+    morning_info = get_detailed_time_forecast(forecast.get('list', []), 8)
+    noon_info = get_detailed_time_forecast(forecast.get('list', []), 13)
+    evening_info = get_detailed_time_forecast(forecast.get('list', []), 18)
+
+    # 최종 메시지 조합
     msg = f"""[Ulsan 오늘 날씨 ⛅]
 {time_str}
 
@@ -95,9 +138,9 @@ def format_message(current, forecast, air):
 🔄 어제와 비교: 📈 비슷해요
 
 [🥪 아침/점심/저녁]
-  🌅 아침 예보
-  ☀️ 점심 예보
-  🌙 저녁 예보
+  🌅 아침: {morning_info}
+  ☀️ 점심: {noon_info}
+  🌙 저녁: {evening_info}
 
 [🔬 바람과 바다]
 🗜️ 기압 : {pressure} hPa
