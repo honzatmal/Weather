@@ -184,31 +184,33 @@ def format_location_block(loc_name, current, forecast, air):
     tide_summary = get_tide_info()
 
     block_lines = [
-        f"📍 <b>[{loc_name}]</b>",
+        f"📍 <b>[ {loc_name} ]</b>",
+        f"──────────────────────",
         f"☁️ 하늘 상태 : {weather_desc}",
-        f"🌅 일출 : {sunrise} | 🌇 일몰 : {sunset}",
+        f"🌅 일출 : {sunrise}  |  🌇 일몰 : {sunset}",
         "",
-        f"[🌡️ 기온 정보]",
-        f"• 현재 기온: {temp:.2f}°C",
-        f"• 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C",
-        f"• 어제와 비교: 📈 비슷해요",
+        f"<b>[🌡️ 기온 정보]</b>",
+        f"• 현재 기온 : <b>{temp:.2f}°C</b>",
+        f"• 최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
+        f"• 어제와 비교 : 📈 비슷한 기온",
+         f"😷 미세먼지 : <b>({dust_status})</b>"
         "",
-        f"[☔ 우천 정보]",
+        f"<b>[☔ 우천 정보]</b>",
         f"{rain_summary}",
         "",
-        f"[🥪 아침/점심/저녁]",
-        f"  🌅 아침: {morning_info}",
-        f"  ☀️ 점심: {noon_info}",
-        f"  🌙 저녁: {evening_info}",
+        f"<b>[🥪 아침 / 점심 / 저녁]</b>",
+        f"  🌅 아침 : {morning_info}",
+        f"  ☀️ 점심 : {noon_info}",
+        f"  🌙 저녁 : {evening_info}",
         "",
-        f"[🔬 바람과 바다]",
-        f"• 기압 : {pressure} hPa | 습도 : {humidity}%",
-        f"• 풍속 : {wind_speed} m/s | 풍향 : {wind_deg}° ({wind_dir_str})",
+        f"<b>[🔬 바람과 바다]</b>",
+        f"• 기압 : {pressure} hPa  |  습도 : {humidity}%",
+        f"• 풍속 : {wind_speed} m/s  |  풍향 : {wind_deg}° ({wind_dir_str})",
         "",
-        f"[바다 정보 및 물때]",
+        f"<b>[🌊 바다 정보 및 물때]</b>",
         f"{tide_summary}",
         "",
-        f"😷 미세먼지: ({dust_status})"
+       
     ]
     return "\n".join(block_lines)
 
@@ -219,11 +221,10 @@ def build_combined_message():
     time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     header_lines = [
-        f"[울산광역시 오늘 날씨 ⛅]",
-        f"{time_str}",
-        f"📅 날짜: {date_str}",
-        "=" * 22,
-        ""
+        f"🔮 <b>[ 울산광역시 종합 날씨 ⛅ ]</b>",
+        f"<i>📅 {time_str}</i>",
+        f"✨ 기준 날짜 : <b>{date_str}</b>",
+        "=" * 28
     ]
     
     body_blocks = []
@@ -232,7 +233,7 @@ def build_combined_message():
         block = format_location_block(loc["name"], cur, fore, air)
         body_blocks.append(block)
 
-    return "\n".join(header_lines) + "\n\n" + ("\n\n" + "-"*25 + "\n\n").join(body_blocks)
+    return "\n".join(header_lines) + "\n\n" + ("\n\n" + "🌊 " + "━"*24 + " 🌊\n\n").join(body_blocks)
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
