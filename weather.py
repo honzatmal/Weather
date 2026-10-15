@@ -25,7 +25,8 @@ def get_weather_data(lat, lon):
 
     return res, forecast_res, air_res
 
-def get_detailed_time_forecast(forecast_list, target_hour):
+def get_custom_time_forecast(forecast_list, target_hour, label):
+    """지정한 시간(target_hour)과 가장 가까운 예보를 찾아 라벨과 함께 반환"""
     KST = timezone(timedelta(hours=9))
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
     
@@ -41,7 +42,7 @@ def get_detailed_time_forecast(forecast_list, target_hour):
                 selected_item = item
 
     if not selected_item:
-        return "정보 없음"
+        return f"  • {label} : 정보 없음"
 
     temp = selected_item['main']['temp']
     feels_like = selected_item['main']['feels_like']
@@ -60,7 +61,7 @@ def get_detailed_time_forecast(forecast_list, target_hour):
     else:
         tip = " — ✨ 활동하기 좋아요"
 
-    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C) | 강수 {pop}%{tip}"
+    return f"  {icon} {label} : {temp:.1f}°C (체감 {feels_like:.1f}°C) | 강수 {pop}%{tip}"
 
 def get_rain_summary(forecast_list):
     KST = timezone(timedelta(hours=9))
@@ -176,9 +177,11 @@ def format_location_block(loc_name, current, forecast, air):
     aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
     dust_status = aqi_text_map.get(aqi, "보통")
 
-    morning_info = get_detailed_time_forecast(forecast.get('list', []), 8)
-    noon_info = get_detailed_time_forecast(forecast.get('list', []), 13)
-    evening_info = get_detailed_time_forecast(forecast.get('list', []), 18)
+    # 요청하신 4가지 시간대 예보 적용 (오전 6시, 오전 11시 50분, 오후 2시 50분, 오후 5시 25분)
+    t1 = get_custom_time_forecast(forecast.get('list', []), 6, "오전 06:00")
+    t2 = get_custom_time_forecast(forecast.get('list', []), 12, "오전 11:50")
+    t3 = get_custom_time_forecast(forecast.get('list', []), 15, "오후 02:50")
+    t4 = get_custom_time_forecast(forecast.get('list', []), 18, "오후 05:25")
 
     rain_summary = get_rain_summary(forecast.get('list', []))
     tide_summary = get_tide_info()
@@ -193,15 +196,15 @@ def format_location_block(loc_name, current, forecast, air):
         f"• 현재 기온 : <b>{temp:.2f}°C</b>",
         f"• 최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
         f"• 어제와 비교 : 📈 비슷한 기온",
-         f"😷 미세먼지 : <b>({dust_status})</b>"
         "",
         f"<b>[☔ 우천 정보]</b>",
         f"{rain_summary}",
         "",
-        f"<b>[🥪 아침 / 점심 / 저녁]</b>",
-        f"  🌅 아침 : {morning_info}",
-        f"  ☀️ 점심 : {noon_info}",
-        f"  🌙 저녁 : {evening_info}",
+        f"<b>[⏰ 시간대별 상세 예보]</b>",
+        t1,
+        t2,
+        t3,
+        t4,
         "",
         f"<b>[🔬 바람과 바다]</b>",
         f"• 기압 : {pressure} hPa  |  습도 : {humidity}%",
@@ -210,7 +213,8 @@ def format_location_block(loc_name, current, forecast, air):
         f"<b>[🌊 바다 정보 및 물때]</b>",
         f"{tide_summary}",
         "",
-       
+        f"😷 미세먼지 : <b>({dust_status})</b>",
+        ""
     ]
     return "\n".join(block_lines)
 
