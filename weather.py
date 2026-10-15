@@ -204,9 +204,10 @@ def build_weather_message():
         f"🌅 일출 : {sunrise}  |  🌇 일몰 : {sunset}",
         "",
         f"<b>[🌡️ 기온 정보]</b>",
-        f"• 현재 기온 : <b>{temp:.2f}°C</b>",
-        f"• 최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
-        f"• 어제와 비교 : 📈 비슷한 기온",
+        f"• 📍현재 기온 : <b>{temp:.2f}°C</b>",
+        f"• 📊최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
+        f"• 🔄어제와 비교 : 📈 비슷한 기온",
+        f"😷 미세먼지 : <b>({dust_status})</b>",
         "",
         f"<b>[☔ 우천 정보]</b>",
         f"{rain_summary}",
@@ -218,14 +219,13 @@ def build_weather_message():
         t4,
         "",
         f"<b>[🔬 바람과 바다]</b>",
-        f"• 기압 : {pressure} hPa  |  습도 : {humidity}%",
-        f"• 풍속 : {wind_speed} m/s  |  풍향 : {wind_deg}° ({wind_dir_str})",
+        f"• 🗜️기압 : {pressure} hPa  |  💧습도 : {humidity}%",
+        f"• 💨풍속 : {wind_speed} m/s  |  🧭풍향 : {wind_deg}° ({wind_dir_str})",
         "",
         f"<b>[🌊 바다 정보 및 물때]</b>",
         f"{tide_summary}",
         "",
-        f"😷 미세먼지 : <b>({dust_status})</b>",
-        ""
+        "",
     ]
 
     return "\n".join(lines)
