@@ -28,7 +28,7 @@ def get_weather_data():
     return res, forecast_res, air_res
 
 def get_detailed_time_forecast(forecast_list, target_hour):
-    """지정한 시간대와 가장 가까운 예보를 찾아 기온, 체감온도, 하늘상태, 강수확률, 우천 정보 및 가이드를 반환"""
+    """지정한 시간대와 가장 가까운 예보를 찾아 기온, 체감온도, 하늘상태, 강수확률 및 가이드를 반환"""
     KST = timezone(timedelta(hours=9))
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
     
@@ -49,41 +49,55 @@ def get_detailed_time_forecast(forecast_list, target_hour):
     temp = selected_item['main']['temp']
     feels_like = selected_item['main']['feels_like']
     pop = int(selected_item.get('pop', 0) * 100)
-    weather_desc = selected_item['weather'][0]['description']
     sky = selected_item['weather'][0]['main']
     
-    # 우천 정보 (강수량이 있는 경우 3시간 동안 내리는 양 mm 추출)
-    rain_volume = selected_item.get('rain', {}).get('3h', 0.0)
+    # 날씨 이모지
+    icon = "☀️" if sky == "Clear" else "☁️" if sky == "Clouds" else "🌧️" if sky == "Rain" else "⛅"
     
-    # 날씨 이모지 및 우천 상태 텍스트 설정
-    if sky == "Rain" or rain_volume > 0:
-        icon = "🌧️"
-        rain_info = f" | ☂️ 비 {rain_volume}mm (강수 {pop}%)"
-    elif sky == "Thunderstorm":
-        icon = "⛈️"
-        rain_info = f" | ⚡ 천둥번개 (강수 {pop}%)"
-    elif sky == "Snow":
-        icon = "🌨️"
-        rain_info = f" | ❄️ 눈 (강수 {pop}%)"
-    elif sky == "Clear":
-        icon = "☀️"
-        rain_info = f" | 강수 {pop}%"
-    else:
-        icon = "☁️"
-        rain_info = f" | 강수 {pop}%"
-
-    # 간단한 행동 가이드 팁 생성
+    # 행동 가이드 팁
     tip = ""
-    if sky == "Rain" or rain_volume > 0 or pop >= 60:
-        tip = " — 🌂 우산 필수!"
+    if pop >= 60 or sky == "Rain":
+        tip = " — 🌂 우산 필수"
     elif temp < 15:
         tip = " — 🧥 겉옷 챙기세요"
     elif temp > 26:
         tip = " — 🕶️ 더위 주의"
     else:
-        tip = " — ✨ 야외활동 좋음"
+        tip = " — ✨ 활동하기 좋아요"
 
-    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C){rain_info}{tip}"
+    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C) | 강수 {pop}%{tip}"
+
+def get_rain_summary(forecast_list):
+    """오늘 하루 중 비가 오는 시간대와 예상 강우량을 요약"""
+    KST = timezone(timedelta(hours=9))
+    today_str = datetime.now(KST).strftime("%Y-%m-%d")
+    
+    rain_slots = []
+    total_rain = 0.0
+    
+    for item in forecast_list:
+        item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
+        item_time_kst = item_time_utc.astimezone(KST)
+        
+        if item_time_kst.strftime("%Y-%m-%d") == today_str:
+            sky = item['weather'][0]['main']
+            rain_vol = item.get('rain', {}).get('3h', 0.0)
+            pop = int(item.get('pop', 0) * 100)
+            
+            # 비가 오거나 강수 확률이 50% 이상인 경우 포착
+            if sky == "Rain" or rain_vol > 0 or pop >= 50:
+                time_label = item_time_kst.strftime("%H시")
+                rain_slots.append(f"{time_label}({pop}%)")
+                total_rain += rain_vol
+
+    if not rain_slots:
+        return "✨ 오늘 비 소식 없음 (맑음)"
+    
+    time_str_res = ", ".join(rain_slots)
+    # 강수량 측정값이 0이지만 확률이 높은 경우 보정
+    rain_display = f"{total_rain:.1f}mm 내외" if total_rain > 0 else "약한 이슬비 또는 흐림"
+    
+    return f"🌧️ 시간대: {time_str_res}\n💧 예상 강우량: {rain_display}"
 
 def format_message(current, forecast, air):
     # 시간 설정 (KST 기준)
@@ -97,7 +111,7 @@ def format_message(current, forecast, air):
     weather_desc = current['weather'][0]['description']
     temp = current['main']['temp']
     
-    # 오늘 하루 3시간 간격 예보 데이터에서 정확한 최저/최고 기온 추출
+    # 오늘 하루 최저/최고 기온 추출
     today_temps = []
     for item in forecast.get('list', []):
         item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
@@ -140,6 +154,9 @@ def format_message(current, forecast, air):
     noon_info = get_detailed_time_forecast(forecast.get('list', []), 13)
     evening_info = get_detailed_time_forecast(forecast.get('list', []), 18)
 
+    # 우천 정보 요약 생성
+    rain_summary = get_rain_summary(forecast.get('list', []))
+
     # 최종 메시지 조합
     msg = f"""[Ulsan 오늘 날씨 ⛅]
 {time_str}
@@ -153,6 +170,9 @@ def format_message(current, forecast, air):
 📍 현재 기온: {temp:.2f}°C
 📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C
 🔄 어제와 비교: 📈 비슷해요
+
+[☔ 우천 정보]
+{rain_summary}
 
 [🥪 아침/점심/저녁]
   🌅 아침: {morning_info}
