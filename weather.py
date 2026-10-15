@@ -92,6 +92,7 @@ def get_rain_summary(forecast_list):
     return f"🌧️ 시간대: {time_str_res}\n💧 예상 강우량: {rain_display}"
 
 def get_tide_info():
+    """상세한 물때 설명과 조석 정보를 반환"""
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
@@ -100,15 +101,26 @@ def get_tide_info():
     
     tide_water_num = (diff_days % 15) + 1
     
-    descriptions = {
-        1: "초보 조류 약함", 2: "조류 점차 빨라짐", 3: "낚시·해루질 양호", 
-        4: "조류 흐름 원활", 5: "조류 원활", 6: "중간 물때", 
-        7: "사리 시작 (조류 강함)", 8: "사리 (물살 매우 빠름)", 9: "사리 (물살 매우 빠름)", 
-        10: "사리 직후", 11: "조류 점차 느려짐", 12: "조류 완만", 
-        13: "조금 (물살 약함)", 14: "무시 (조류 가장 약함)", 15: "조금 직후"
+    # 물때별 상세 설명 및 특징
+    tide_details = {
+        1: "1물 - 조류가 느리기 시작하며 물 빠짐이 완만함",
+        2: "2물 - 조류가 서서히 빨라지며 활동하기 무난함",
+        3: "3물 - 물살과 조류가 적당하여 낚시 및 해루질 최적기",
+        4: "4물 - 조류 흐름이 원활하고 활성도가 좋아짐",
+        5: "5물 - 조류가 제법 강해지기 시작하는 단계",
+        6: "6물 - 조류가 빨라지고 물의 드나듦이 뚜렷함",
+        7: "7물 - 사리(대조기) 시작, 조류가 매우 강하고 물골 주의",
+        8: "8물 - 사리 기간, 물살이 가장 거세고 수위 변화 큼",
+        9: "9물 - 사리 직후로 여전히 조류가 빠른 상태",
+        10: "10물 - 조류가 점차 꺾이고 느려지기 시작함",
+        11: "11물 - 물살이 약해지고 잔잔해지는 과정",
+        12: "12물 - 조류가 완만해져 초보자 활동에 좋음",
+        13: "13물(조금) - 조차(만조와 간조의 차이)가 가장 작고 물살이 느림",
+        14: "14물(무시) - 조류 흐름이 거의 없어 바다가 잔잔함",
+        15: "15물(조금 직후) - 물살이 다시 살아나기 시작하는 시점"
     }
-    tide_desc = descriptions.get(tide_water_num, "일반 물때")
-    tide_str = f"{tide_water_num}물 ({tide_desc})"
+    
+    tide_desc_text = tide_details.get(tide_water_num, "일반 물때")
     
     base_hour_high1 = 4.5 + (diff_days * 0.8) % 12.4
     base_hour_low1 = base_hour_high1 + 6.2
@@ -125,7 +137,7 @@ def get_tide_info():
     low1 = format_time(base_hour_low1)
     low2 = format_time(base_hour_low2)
     
-    return f"🌊 만조 시간 : {high1}, {high2}\n🐚 간조 시간 : {low1}, {low2}\n📈 물때 : {tide_str}"
+    return f"🌊 만조 시간 : {high1}, {high2}\n🐚 간조 시간 : {low1}, {low2}\n📈 물때 정보 : {tide_desc_text}"
 
 def format_message(loc_name, current, forecast, air):
     KST = timezone(timedelta(hours=9))
@@ -209,7 +221,7 @@ def format_message(loc_name, current, forecast, air):
         f"[{loc_name} 바다 정보]",
         f"{tide_summary}",
         "",
-      
+        
     ]
 
     return "\n".join(lines)
@@ -224,7 +236,13 @@ def send_telegram(message):
     requests.post(url, json=payload)
 
 if __name__ == "__main__":
-    for loc in LOCATIONS:
+    combined_message = ""
+    for idx, loc in enumerate(LOCATIONS):
         cur, fore, air = get_weather_data(loc["lat"], loc["lon"])
-        message = format_message(loc["name"], cur, fore, air)
-        send_telegram(message)
+        msg = format_message(loc["name"], cur, fore, air)
+        
+        combined_message += msg
+        if idx < len(LOCATIONS) - 1:
+            combined_message += "\n\n" + "="*25 + "\n\n"  # 지역 간 경계선 추가
+
+    send_telegram(combined_message)
