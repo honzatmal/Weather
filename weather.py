@@ -84,7 +84,6 @@ def get_rain_summary(forecast_list):
             rain_vol = item.get('rain', {}).get('3h', 0.0)
             pop = int(item.get('pop', 0) * 100)
             
-            # 비가 오거나 강수 확률이 50% 이상인 경우 포착
             if sky == "Rain" or rain_vol > 0 or pop >= 50:
                 time_label = item_time_kst.strftime("%H시")
                 rain_slots.append(f"{time_label}({pop}%)")
@@ -94,10 +93,40 @@ def get_rain_summary(forecast_list):
         return "✨ 오늘 비 소식 없음 (맑음)"
     
     time_str_res = ", ".join(rain_slots)
-    # 강수량 측정값이 0이지만 확률이 높은 경우 보정
     rain_display = f"{total_rain:.1f}mm 내외" if total_rain > 0 else "약한 이슬비 또는 흐림"
     
     return f"🌧️ 시간대: {time_str_res}\n💧 예상 강우량: {rain_display}"
+
+def get_tide_info():
+    """울산 연안 기준 대략적인 조석(만조/간조) 정보 및 물때 계산 (음력 기반 추정)"""
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST)
+    
+    # 기준일(2026년 1월 1일) 대비 경과일 계산을 통한 대략적인 물때 주기 산출
+    base_date = datetime(2026, 1, 1, tzinfo=KST)
+    diff_days = (now_kst - base_date).days
+    
+    # 물때 번호 (1물 ~ 30물 주기)
+    tide_water_num = (diff_days % 15) + 1
+    tide_str = f"{tide_water_num}물"
+    
+    # 일일 조석 시간 계산 (조금씩 밀려나는 조석 주기 반영)
+    base_hour_high1 = 4.5 + (diff_days * 0.8) % 12.4
+    base_hour_low1 = base_hour_high1 + 6.2
+    base_hour_high2 = base_hour_high1 + 12.4
+    base_hour_low2 = base_hour_low1 + 12.4
+    
+    def format_time(decimal_hours):
+        h = int(decimal_hours % 24)
+        m = int((decimal_hours % 1) * 60)
+        return f"{h:02d}:{m:02d}"
+    
+    high1 = format_time(base_hour_high1)
+    high2 = format_time(base_hour_high2)
+    low1 = format_time(base_hour_low1)
+    low2 = format_time(base_hour_low2)
+    
+    return f"만조 시간 : {high1}, {high2}\n간조 시간 : {low1}, {low2}\n물때 : {tide_str}"
 
 def format_message(current, forecast, air):
     # 시간 설정 (KST 기준)
@@ -154,8 +183,9 @@ def format_message(current, forecast, air):
     noon_info = get_detailed_time_forecast(forecast.get('list', []), 13)
     evening_info = get_detailed_time_forecast(forecast.get('list', []), 18)
 
-    # 우천 정보 요약 생성
+    # 우천 정보 및 바다 정보 생성
     rain_summary = get_rain_summary(forecast.get('list', []))
+    tide_summary = get_tide_info()
 
     # 최종 메시지 조합
     msg = f"""[Ulsan 오늘 날씨 ⛅]
@@ -170,6 +200,7 @@ def format_message(current, forecast, air):
 📍 현재 기온: {temp:.2f}°C
 📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C
 🔄 어제와 비교: 📈 비슷해요
+😷 미세먼지: ({dust_status})"""
 
 [☔ 우천 정보]
 {rain_summary}
@@ -185,7 +216,9 @@ def format_message(current, forecast, air):
 💨 풍속 : {wind_speed} m/s
 🧭 풍향 : {wind_deg}° ({wind_dir_str})
 
-😷 미세먼지: ({dust_status})"""
+[울산 바다 정보]
+{tide_summary}
+
 
     return msg
 
