@@ -13,15 +13,15 @@ LON = 129.3114
 CITY_NAME = "Ulsan"
 
 def get_weather_data():
-    # 1. 현재 날씨 및 예보 API 호출 (One Call API 3.0 또는 2.5 기준)
+    # 1. 현재 날씨 API
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     res = requests.get(url).json()
     
-    # 추가 상세 예보를 위한 5일/3시간 예보 API 호출
+    # 2. 5일/3시간 단위 예보 API (오늘 하루 전체 최저/최고 기온 계산용)
     forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     forecast_res = requests.get(forecast_url).json()
 
-    # 미세먼지 API 호출
+    # 3. 미세먼지 API
     air_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={LAT}&lon={LON}&appid={API_KEY}"
     air_res = requests.get(air_url).json()
 
@@ -32,14 +32,34 @@ def format_message(current, forecast, air):
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     date_str = now_kst.strftime("%Y-%m-%d (%A)")
-    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT") # 이미지 스타일 맞춤
+    today_date_str = now_kst.strftime("%Y-%m-%d")
+    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     # 기본 정보 파싱
     weather_desc = current['weather'][0]['description']
     temp = current['main']['temp']
-    temp_max = current['main']['temp_max']
-    temp_min = current['main']['temp_min']
     
+    # [수정] 오늘 하루 3시간 간격 예보 데이터에서 정확한 최저/최고 기온 추출
+    today_temps = []
+    for item in forecast.get('list', []):
+        # 데이터의 UTC 시간을 KST로 변환하여 오늘 날짜에 해당하는 항목만 골라냄
+        item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
+        item_time_kst = item_time_utc.astimezone(KST)
+        
+        if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
+            today_temps.append(item['main']['temp_min'])
+            today_temps.append(item['main']['temp_max'])
+            # 각 시간대별 대표 기온도 포함해서 정확도 높임
+            today_temps.append(item['main']['temp'])
+
+    if today_temps:
+        temp_min = min(today_temps)
+        temp_max = max(today_temps)
+    else:
+        # 혹시 데이터가 없을 경우 현재 기온 기반 대체
+        temp_min = current['main']['temp_min']
+        temp_max = current['main']['temp_max']
+
     # 일출/일몰 시간 변환
     sunrise = datetime.fromtimestamp(current['sys']['sunrise'], KST).strftime("%H:%M")
     sunset = datetime.fromtimestamp(current['sys']['sunset'], KST).strftime("%H:%M")
@@ -55,12 +75,12 @@ def format_message(current, forecast, air):
             "남풍", "남남서풍", "남서풍", "서남서풍", "서풍", "서북서풍", "북서풍", "북북서풍"]
     wind_dir_str = dirs[int((wind_deg + 11.25) / 22.5) % 16]
 
-    # 미세먼지 등급 (AQI 1: 좋음, 2: 양호, 3: 보통, 4: 나쁨, 5: 매우 나쁨)
+    # 미세먼지 등급
     aqi = air['list'][0]['main']['aqi']
     aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
     dust_status = aqi_text_map.get(aqi, "보통")
 
-    # 메시지 조합 (보내주신 이미지 레이아웃 반영)
+    # 메시지 조합 (최저/최고 순서 반영)
     msg = f"""[Ulsan 오늘 날씨 ⛅]
 {time_str}
 
@@ -71,7 +91,7 @@ def format_message(current, forecast, air):
 
 [🌡️ 기온 정보]
 📍 현재 기온: {temp:.2f}°C
-📊 최고/최저: {temp_max:.2f}°C / {temp_min:.2f}°C
+📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C
 🔄 어제와 비교: 📈 비슷해요
 
 [🥪 아침/점심/저녁]
@@ -90,7 +110,7 @@ def format_message(current, forecast, air):
     return msg
 
 def send_telegram(message):
-    url = f"https://api.org/bot{TOKEN}/sendMessage" if False else f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
         "text": message,
