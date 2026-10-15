@@ -7,19 +7,20 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 API_KEY = os.getenv("WEATHER_API_KEY")
 
-# 울산 좌표 (OpenWeatherMap용)
-LAT = 35.5384
-LON = 129.3114
-CITY_NAME = "Ulsan"
+# 조회할 지역 리스트 (온산읍, 정자)
+LOCATIONS = [
+    {"name": "울산 온산읍", "lat": 35.4261, "lon": 129.3364},
+    {"name": "울산 정자", "lat": 35.6600, "lon": 129.4400}
+]
 
-def get_weather_data():
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
+def get_weather_data(lat, lon):
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=kr"
     res = requests.get(url).json()
     
-    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
+    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=kr"
     forecast_res = requests.get(forecast_url).json()
 
-    air_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={LAT}&lon={LON}&appid={API_KEY}"
+    air_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={lat}&lon={lon}&appid={API_KEY}"
     air_res = requests.get(air_url).json()
 
     return res, forecast_res, air_res
@@ -98,7 +99,16 @@ def get_tide_info():
     diff_days = (now_kst - base_date).days
     
     tide_water_num = (diff_days % 15) + 1
-    tide_str = f"{tide_water_num}물"
+    
+    descriptions = {
+        1: "초보 조류 약함", 2: "조류 점차 빨라짐", 3: "낚시·해루질 양호", 
+        4: "조류 흐름 원활", 5: "조류 원활", 6: "중간 물때", 
+        7: "사리 시작 (조류 강함)", 8: "사리 (물살 매우 빠름)", 9: "사리 (물살 매우 빠름)", 
+        10: "사리 직후", 11: "조류 점차 느려짐", 12: "조류 완만", 
+        13: "조금 (물살 약함)", 14: "무시 (조류 가장 약함)", 15: "조금 직후"
+    }
+    tide_desc = descriptions.get(tide_water_num, "일반 물때")
+    tide_str = f"{tide_water_num}물 ({tide_desc})"
     
     base_hour_high1 = 4.5 + (diff_days * 0.8) % 12.4
     base_hour_low1 = base_hour_high1 + 6.2
@@ -115,9 +125,9 @@ def get_tide_info():
     low1 = format_time(base_hour_low1)
     low2 = format_time(base_hour_low2)
     
-    return f"만조 시간 : {high1}, {high2}\n간조 시간 : {low1}, {low2}\n물때 : {tide_str}"
+    return f"🌊 만조 시간 : {high1}, {high2}\n🐚 간조 시간 : {low1}, {low2}\n📈 물때 : {tide_str}"
 
-def format_message(current, forecast, air):
+def format_message(loc_name, current, forecast, air):
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     date_str = now_kst.strftime("%Y-%m-%d (%A)")
@@ -168,7 +178,7 @@ def format_message(current, forecast, air):
     tide_summary = get_tide_info()
 
     lines = [
-        f"[Ulsan 오늘 날씨 ⛅]",
+        f"[{loc_name} 오늘 날씨 ⛅]",
         f"{time_str}",
         "",
         f"📅 날짜: {date_str}",
@@ -180,6 +190,7 @@ def format_message(current, forecast, air):
         f"📍 현재 기온: {temp:.2f}°C",
         f"📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C",
         f"🔄 어제와 비교: 📈 비슷해요",
+        f"😷 미세먼지: ({dust_status})"
         "",
         f"[☔ 우천 정보]",
         f"{rain_summary}",
@@ -195,10 +206,10 @@ def format_message(current, forecast, air):
         f"💨 풍속 : {wind_speed} m/s",
         f"🧭 풍향 : {wind_deg}° ({wind_dir_str})",
         "",
-        f"[울산 바다 정보]",
+        f"[{loc_name} 바다 정보]",
         f"{tide_summary}",
         "",
-        f"😷 미세먼지: ({dust_status})"
+      
     ]
 
     return "\n".join(lines)
@@ -213,6 +224,7 @@ def send_telegram(message):
     requests.post(url, json=payload)
 
 if __name__ == "__main__":
-    cur, fore, air = get_weather_data()
-    message = format_message(cur, fore, air)
-    send_telegram(message)
+    for loc in LOCATIONS:
+        cur, fore, air = get_weather_data(loc["lat"], loc["lon"])
+        message = format_message(loc["name"], cur, fore, air)
+        send_telegram(message)
