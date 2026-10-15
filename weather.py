@@ -7,10 +7,11 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 API_KEY = os.getenv("WEATHER_API_KEY")
 
-# 조회할 지역 리스트 (울산광역시)
+# 조회할 지역 리스트 (온산읍, 정자)
 LOCATIONS = [
-    {"name": "울산광역시", "lat": 35.4261, "lon": 129.3364},
-    ]
+    {"name": "울산 온산읍", "lat": 35.4261, "lon": 129.3364},
+    {"name": "울산 정자", "lat": 35.6600, "lon": 129.4400}
+]
 
 def get_weather_data(lat, lon):
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=kr"
@@ -91,7 +92,6 @@ def get_rain_summary(forecast_list):
     return f"🌧️ 시간대: {time_str_res}\n💧 예상 강우량: {rain_display}"
 
 def get_tide_info():
-    """상세한 물때 설명과 조석 정보를 반환"""
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
@@ -100,7 +100,6 @@ def get_tide_info():
     
     tide_water_num = (diff_days % 15) + 1
     
-    # 물때별 상세 설명 및 특징
     tide_details = {
         1: "1물 - 조류가 느리기 시작하며 물 빠짐이 완만함",
         2: "2물 - 조류가 서서히 빨라지며 활동하기 무난함",
@@ -138,20 +137,15 @@ def get_tide_info():
     
     return f"🌊 만조 시간 : {high1}, {high2}\n🐚 간조 시간 : {low1}, {low2}\n📈 물때 정보 : {tide_desc_text}"
 
-def format_message(loc_name, current, forecast, air):
-    KST = timezone(timedelta(hours=9))
-    now_kst = datetime.now(KST)
-    date_str = now_kst.strftime("%Y-%m-%d (%A)")
-    today_date_str = now_kst.strftime("%Y-%m-%d")
-    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
-
+def format_location_block(loc_name, current, forecast, air):
     weather_desc = current['weather'][0]['description']
     temp = current['main']['temp']
     
+    today_date_str = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
     today_temps = []
     for item in forecast.get('list', []):
         item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
-        item_time_kst = item_time_utc.astimezone(KST)
+        item_time_kst = item_time_utc.astimezone(timezone(timedelta(hours=9)))
         
         if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
             today_temps.append(item['main']['temp_min'])
@@ -165,6 +159,7 @@ def format_message(loc_name, current, forecast, air):
         temp_min = current['main']['temp_min']
         temp_max = current['main']['temp_max']
 
+    KST = timezone(timedelta(hours=9))
     sunrise = datetime.fromtimestamp(current['sys']['sunrise'], KST).strftime("%H:%M")
     sunset = datetime.fromtimestamp(current['sys']['sunset'], KST).strftime("%H:%M")
 
@@ -188,20 +183,15 @@ def format_message(loc_name, current, forecast, air):
     rain_summary = get_rain_summary(forecast.get('list', []))
     tide_summary = get_tide_info()
 
-    lines = [
-        f"[{loc_name} 오늘 날씨 ⛅]",
-        f"{time_str}",
-        "",
-        f"📅 날짜: {date_str}",
-        f"🌅 일출 : {sunrise}",
-        f"🌇 일몰 : {sunset}",
-        f"☁️ 현재 하늘 상태 : {weather_desc}",
+    block_lines = [
+        f"📍 <b>[{loc_name}]</b>",
+        f"☁️ 하늘 상태 : {weather_desc}",
+        f"🌅 일출 : {sunrise} | 🌇 일몰 : {sunset}",
         "",
         f"[🌡️ 기온 정보]",
-        f"📍 현재 기온: {temp:.2f}°C",
-        f"📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C",
-        f"🔄 어제와 비교: 📈 비슷해요",
-        f"😷 미세먼지: ({dust_status})"
+        f"• 현재 기온: {temp:.2f}°C",
+        f"• 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C",
+        f"• 어제와 비교: 📈 비슷해요",
         "",
         f"[☔ 우천 정보]",
         f"{rain_summary}",
@@ -212,18 +202,37 @@ def format_message(loc_name, current, forecast, air):
         f"  🌙 저녁: {evening_info}",
         "",
         f"[🔬 바람과 바다]",
-        f"🗜️ 기압 : {pressure} hPa",
-        f"💧 대기습도 : {humidity} %",
-        f"💨 풍속 : {wind_speed} m/s",
-        f"🧭 풍향 : {wind_deg}° ({wind_dir_str})",
+        f"• 기압 : {pressure} hPa | 습도 : {humidity}%",
+        f"• 풍속 : {wind_speed} m/s | 풍향 : {wind_deg}° ({wind_dir_str})",
         "",
-        f"[{loc_name} 바다 정보]",
+        f"[바다 정보 및 물때]",
         f"{tide_summary}",
         "",
-        
+        f"😷 미세먼지: ({dust_status})"
     ]
+    return "\n".join(block_lines)
 
-    return "\n".join(lines)
+def build_combined_message():
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST)
+    date_str = now_kst.strftime("%Y-%m-%d (%A)")
+    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+    header_lines = [
+        f"[울산광역시 오늘 날씨 ⛅]",
+        f"{time_str}",
+        f"📅 날짜: {date_str}",
+        "=" * 22,
+        ""
+    ]
+    
+    body_blocks = []
+    for loc in LOCATIONS:
+        cur, fore, air = get_weather_data(loc["lat"], loc["lon"])
+        block = format_location_block(loc["name"], cur, fore, air)
+        body_blocks.append(block)
+
+    return "\n".join(header_lines) + "\n\n" + ("\n\n" + "-"*25 + "\n\n").join(body_blocks)
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -235,13 +244,5 @@ def send_telegram(message):
     requests.post(url, json=payload)
 
 if __name__ == "__main__":
-    combined_message = ""
-    for idx, loc in enumerate(LOCATIONS):
-        cur, fore, air = get_weather_data(loc["lat"], loc["lon"])
-        msg = format_message(loc["name"], cur, fore, air)
-        
-        combined_message += msg
-        if idx < len(LOCATIONS) - 1:
-            combined_message += "\n\n" + "="*25 + "\n\n"  # 지역 간 경계선 추가
-
-    send_telegram(combined_message)
+    message = build_combined_message()
+    send_telegram(message)
