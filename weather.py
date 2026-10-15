@@ -17,7 +17,7 @@ def get_weather_data():
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     res = requests.get(url).json()
     
-    # 2. 5일/3시간 단위 예보 API (오늘 하루 전체 최저/최고 기온 및 시간대별 예보용)
+    # 2. 5일/3시간 단위 예보 API (최저/최고 기온 및 시간대별 예보용)
     forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=kr"
     forecast_res = requests.get(forecast_url).json()
 
@@ -28,7 +28,7 @@ def get_weather_data():
     return res, forecast_res, air_res
 
 def get_detailed_time_forecast(forecast_list, target_hour):
-    """지정한 시간대와 가장 가까운 예보를 찾아 체감온도, 기온, 하늘상태, 강수확률 및 가이드를 반환"""
+    """지정한 시간대와 가장 가까운 예보를 찾아 기온, 체감온도, 하늘상태, 강수확률, 우천 정보 및 가이드를 반환"""
     KST = timezone(timedelta(hours=9))
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
     
@@ -52,21 +52,38 @@ def get_detailed_time_forecast(forecast_list, target_hour):
     weather_desc = selected_item['weather'][0]['description']
     sky = selected_item['weather'][0]['main']
     
-    # 날씨 이모지
-    icon = "☀️" if sky == "Clear" else "☁️" if sky == "Clouds" else "🌧️" if sky == "Rain" else "⛅"
+    # 우천 정보 (강수량이 있는 경우 3시간 동안 내리는 양 mm 추출)
+    rain_volume = selected_item.get('rain', {}).get('3h', 0.0)
     
+    # 날씨 이모지 및 우천 상태 텍스트 설정
+    if sky == "Rain" or rain_volume > 0:
+        icon = "🌧️"
+        rain_info = f" | ☂️ 비 {rain_volume}mm (강수 {pop}%)"
+    elif sky == "Thunderstorm":
+        icon = "⛈️"
+        rain_info = f" | ⚡ 천둥번개 (강수 {pop}%)"
+    elif sky == "Snow":
+        icon = "🌨️"
+        rain_info = f" | ❄️ 눈 (강수 {pop}%)"
+    elif sky == "Clear":
+        icon = "☀️"
+        rain_info = f" | 강수 {pop}%"
+    else:
+        icon = "☁️"
+        rain_info = f" | 강수 {pop}%"
+
     # 간단한 행동 가이드 팁 생성
     tip = ""
-    if pop >= 50:
-        tip = " — ☂️ 우산 챙기세요"
+    if sky == "Rain" or rain_volume > 0 or pop >= 60:
+        tip = " — 🌂 우산 필수!"
     elif temp < 15:
-        tip = " — 🧥 겉옷 필수"
+        tip = " — 🧥 겉옷 챙기세요"
     elif temp > 26:
         tip = " — 🕶️ 더위 주의"
     else:
-        tip = " — ✨ 활동하기 좋아요"
+        tip = " — ✨ 야외활동 좋음"
 
-    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C) | 강수 {pop}%{tip}"
+    return f"{icon} {temp:.1f}°C (체감 {feels_like:.1f}°C){rain_info}{tip}"
 
 def format_message(current, forecast, air):
     # 시간 설정 (KST 기준)
