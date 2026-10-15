@@ -25,7 +25,6 @@ def get_weather_data(lat, lon):
     return res, forecast_res, air_res
 
 def get_custom_time_forecast(forecast_list, target_hour, label):
-    """지정한 시간(target_hour)과 가장 가까운 예보를 찾아 라벨과 함께 반환"""
     KST = timezone(timedelta(hours=9))
     today_str = datetime.now(KST).strftime("%Y-%m-%d")
     
@@ -135,4 +134,111 @@ def get_tide_info():
     low1 = format_time(base_hour_low1)
     low2 = format_time(base_hour_low2)
     
-    return f"🌊 만조 시간 : {high1}, {high2}\n🐚
+    tide_lines = [
+        f"🌊 만조 시간 : {high1}, {high2}",
+        f"🐚 간조 시간 : {low1}, {low2}",
+        f"📈 물때 정보 : {tide_desc_text}"
+    ]
+    return "\n".join(tide_lines)
+
+def build_weather_message():
+    current, forecast, air = get_weather_data(LAT, LON)
+    
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST)
+    date_str = now_kst.strftime("%Y-%m-%d (%A)")
+    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+    weather_desc = current['weather'][0]['description']
+    temp = current['main']['temp']
+    
+    today_date_str = now_kst.strftime("%Y-%m-%d")
+    today_temps = []
+    for item in forecast.get('list', []):
+        item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
+        item_time_kst = item_time_utc.astimezone(KST)
+        
+        if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
+            today_temps.append(item['main']['temp_min'])
+            today_temps.append(item['main']['temp_max'])
+            today_temps.append(item['main']['temp'])
+
+    if today_temps:
+        temp_min = min(today_temps)
+        temp_max = max(today_temps)
+    else:
+        temp_min = current['main']['temp_min']
+        temp_max = current['main']['temp_max']
+
+    sunrise = datetime.fromtimestamp(current['sys']['sunrise'], KST).strftime("%H:%M")
+    sunset = datetime.fromtimestamp(current['sys']['sunset'], KST).strftime("%H:%M")
+
+    pressure = current['main']['pressure']
+    humidity = current['main']['humidity']
+    wind_speed = current['wind']['speed']
+    wind_deg = current['wind'].get('deg', 0)
+    
+    dirs = ["북풍", "북북동풍", "북동풍", "동북동풍", "동풍", "동남동풍", "남동풍", "남남동풍", 
+            "남풍", "남남서풍", "남서풍", "서남서풍", "서풍", "서북서풍", "북서풍", "북북서풍"]
+    wind_dir_str = dirs[int((wind_deg + 11.25) / 22.5) % 16]
+
+    aqi = air['list'][0]['main']['aqi']
+    aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
+    dust_status = aqi_text_map.get(aqi, "보통")
+
+    t1 = get_custom_time_forecast(forecast.get('list', []), 6, "오전 06:00")
+    t2 = get_custom_time_forecast(forecast.get('list', []), 12, "오전 11:50")
+    t3 = get_custom_time_forecast(forecast.get('list', []), 15, "오후 02:50")
+    t4 = get_custom_time_forecast(forecast.get('list', []), 18, "오후 05:25")
+
+    rain_summary = get_rain_summary(forecast.get('list', []))
+    tide_summary = get_tide_info()
+
+    lines = [
+        f"🔮 <b>[ {LOC_NAME} 오늘 날씨 ⛅ ]</b>",
+        f"<i>📅 {time_str}</i>",
+        f"✨ 기준 날짜 : <b>{date_str}</b>",
+        "=" * 28,
+        "",
+        f"☁️ 하늘 상태 : {weather_desc}",
+        f"🌅 일출 : {sunrise}  |  🌇 일몰 : {sunset}",
+        "",
+        f"<b>[🌡️ 기온 정보]</b>",
+        f"• 현재 기온 : <b>{temp:.2f}°C</b>",
+        f"• 최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
+        f"• 어제와 비교 : 📈 비슷한 기온",
+        "",
+        f"<b>[☔ 우천 정보]</b>",
+        f"{rain_summary}",
+        "",
+        f"<b>[⏰ 시간대별 상세 예보]</b>",
+        t1,
+        t2,
+        t3,
+        t4,
+        "",
+        f"<b>[🔬 바람과 바다]</b>",
+        f"• 기압 : {pressure} hPa  |  습도 : {humidity}%",
+        f"• 풍속 : {wind_speed} m/s  |  풍향 : {wind_deg}° ({wind_dir_str})",
+        "",
+        f"<b>[🌊 바다 정보 및 물때]</b>",
+        f"{tide_summary}",
+        "",
+        f"😷 미세먼지 : <b>({dust_status})</b>",
+        ""
+    ]
+
+    return "\n".join(lines)
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+    requests.post(url, json=payload)
+
+if __name__ == "__main__":
+    message = build_weather_message()
+    send_telegram(message)
