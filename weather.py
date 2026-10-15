@@ -7,11 +7,10 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 API_KEY = os.getenv("WEATHER_API_KEY")
 
-# 조회할 지역 리스트 (온산읍, 정자)
+# 조회할 지역 리스트 (울산광역시)
 LOCATIONS = [
-    {"name": "울산 온산읍", "lat": 35.4261, "lon": 129.3364},
-    {"name": "울산 정자", "lat": 35.6600, "lon": 129.4400}
-]
+    {"name": "울산광역시", "lat": 35.4261, "lon": 129.3364},
+    ]
 
 def get_weather_data(lat, lon):
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=kr"
