@@ -7,11 +7,10 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 API_KEY = os.getenv("WEATHER_API_KEY")
 
-# 조회할 지역 리스트 (온산읍, 정자)
-LOCATIONS = [
-    {"name": "울산 온산읍", "lat": 35.4261, "lon": 129.3364},
-    {"name": "울산 정자", "lat": 35.6600, "lon": 129.4400}
-]
+# 울산 온산읍 좌표
+LAT = 35.4261
+LON = 129.3364
+LOC_NAME = "울산 온산읍"
 
 def get_weather_data(lat, lon):
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=kr"
@@ -136,118 +135,4 @@ def get_tide_info():
     low1 = format_time(base_hour_low1)
     low2 = format_time(base_hour_low2)
     
-    return f"🌊 만조 시간 : {high1}, {high2}\n🐚 간조 시간 : {low1}, {low2}\n📈 물때 정보 : {tide_desc_text}"
-
-def format_location_block(loc_name, current, forecast, air):
-    weather_desc = current['weather'][0]['description']
-    temp = current['main']['temp']
-    
-    today_date_str = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
-    today_temps = []
-    for item in forecast.get('list', []):
-        item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
-        item_time_kst = item_time_utc.astimezone(timezone(timedelta(hours=9)))
-        
-        if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
-            today_temps.append(item['main']['temp_min'])
-            today_temps.append(item['main']['temp_max'])
-            today_temps.append(item['main']['temp'])
-
-    if today_temps:
-        temp_min = min(today_temps)
-        temp_max = max(today_temps)
-    else:
-        temp_min = current['main']['temp_min']
-        temp_max = current['main']['temp_max']
-
-    KST = timezone(timedelta(hours=9))
-    sunrise = datetime.fromtimestamp(current['sys']['sunrise'], KST).strftime("%H:%M")
-    sunset = datetime.fromtimestamp(current['sys']['sunset'], KST).strftime("%H:%M")
-
-    pressure = current['main']['pressure']
-    humidity = current['main']['humidity']
-    wind_speed = current['wind']['speed']
-    wind_deg = current['wind'].get('deg', 0)
-    
-    dirs = ["북풍", "북북동풍", "북동풍", "동북동풍", "동풍", "동남동풍", "남동풍", "남남동풍", 
-            "남풍", "남남서풍", "남서풍", "서남서풍", "서풍", "서북서풍", "북서풍", "북북서풍"]
-    wind_dir_str = dirs[int((wind_deg + 11.25) / 22.5) % 16]
-
-    aqi = air['list'][0]['main']['aqi']
-    aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
-    dust_status = aqi_text_map.get(aqi, "보통")
-
-    # 요청하신 4가지 시간대 예보 적용 (오전 6시, 오전 11시 50분, 오후 2시 50분, 오후 5시 25분)
-    t1 = get_custom_time_forecast(forecast.get('list', []), 6, "오전 06:00")
-    t2 = get_custom_time_forecast(forecast.get('list', []), 12, "오전 11:50")
-    t3 = get_custom_time_forecast(forecast.get('list', []), 15, "오후 02:50")
-    t4 = get_custom_time_forecast(forecast.get('list', []), 18, "오후 05:25")
-
-    rain_summary = get_rain_summary(forecast.get('list', []))
-    tide_summary = get_tide_info()
-
-    block_lines = [
-        f"📍 <b>[ {loc_name} ]</b>",
-        f"──────────────────────",
-        f"☁️ 하늘 상태 : {weather_desc}",
-        f"🌅 일출 : {sunrise}  |  🌇 일몰 : {sunset}",
-        "",
-        f"<b>[🌡️ 기온 정보]</b>",
-        f"• 현재 기온 : <b>{temp:.2f}°C</b>",
-        f"• 최저 / 최고 : {temp_min:.2f}°C / {temp_max:.2f}°C",
-        f"• 어제와 비교 : 📈 비슷한 기온",
-        "",
-        f"<b>[☔ 우천 정보]</b>",
-        f"{rain_summary}",
-        "",
-        f"<b>[⏰ 시간대별 상세 예보]</b>",
-        t1,
-        t2,
-        t3,
-        t4,
-        "",
-        f"<b>[🔬 바람과 바다]</b>",
-        f"• 기압 : {pressure} hPa  |  습도 : {humidity}%",
-        f"• 풍속 : {wind_speed} m/s  |  풍향 : {wind_deg}° ({wind_dir_str})",
-        "",
-        f"<b>[🌊 바다 정보 및 물때]</b>",
-        f"{tide_summary}",
-        "",
-        f"😷 미세먼지 : <b>({dust_status})</b>",
-        ""
-    ]
-    return "\n".join(block_lines)
-
-def build_combined_message():
-    KST = timezone(timedelta(hours=9))
-    now_kst = datetime.now(KST)
-    date_str = now_kst.strftime("%Y-%m-%d (%A)")
-    time_str = now_kst.strftime("%a, %d %b %Y %H:%M:%S GMT")
-
-    header_lines = [
-        f"🔮 <b>[ 울산광역시 종합 날씨 ⛅ ]</b>",
-        f"<i>📅 {time_str}</i>",
-        f"✨ 기준 날짜 : <b>{date_str}</b>",
-        "=" * 28
-    ]
-    
-    body_blocks = []
-    for loc in LOCATIONS:
-        cur, fore, air = get_weather_data(loc["lat"], loc["lon"])
-        block = format_location_block(loc["name"], cur, fore, air)
-        body_blocks.append(block)
-
-    return "\n".join(header_lines) + "\n\n" + ("\n\n" + "🌊 " + "━"*24 + " 🌊\n\n").join(body_blocks)
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-    requests.post(url, json=payload)
-
-if __name__ == "__main__":
-    message = build_combined_message()
-    send_telegram(message)
+    return f"🌊 만조 시간 : {high1}, {high2}\n🐚
