@@ -98,19 +98,16 @@ def get_rain_summary(forecast_list):
     return f"🌧️ 시간대: {time_str_res}\n💧 예상 강우량: {rain_display}"
 
 def get_tide_info():
-    """울산 연안 기준 대략적인 조석(만조/간조) 정보 및 물때 계산 (음력 기반 추정)"""
+    """울산 연안 기준 대략적인 조석(만조/간조) 정보 및 물때 계산"""
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
     
-    # 기준일(2026년 1월 1일) 대비 경과일 계산을 통한 대략적인 물때 주기 산출
     base_date = datetime(2026, 1, 1, tzinfo=KST)
     diff_days = (now_kst - base_date).days
     
-    # 물때 번호 (1물 ~ 30물 주기)
     tide_water_num = (diff_days % 15) + 1
     tide_str = f"{tide_water_num}물"
     
-    # 일일 조석 시간 계산 (조금씩 밀려나는 조석 주기 반영)
     base_hour_high1 = 4.5 + (diff_days * 0.8) % 12.4
     base_hour_low1 = base_hour_high1 + 6.2
     base_hour_high2 = base_hour_high1 + 12.4
@@ -143,95 +140,4 @@ def format_message(current, forecast, air):
     # 오늘 하루 최저/최고 기온 추출
     today_temps = []
     for item in forecast.get('list', []):
-        item_time_utc = datetime.fromtimestamp(item['dt'], timezone.utc)
-        item_time_kst = item_time_utc.astimezone(KST)
-        
-        if item_time_kst.strftime("%Y-%m-%d") == today_date_str:
-            today_temps.append(item['main']['temp_min'])
-            today_temps.append(item['main']['temp_max'])
-            today_temps.append(item['main']['temp'])
-
-    if today_temps:
-        temp_min = min(today_temps)
-        temp_max = max(today_temps)
-    else:
-        temp_min = current['main']['temp_min']
-        temp_max = current['main']['temp_max']
-
-    # 일출/일몰 시간 변환
-    sunrise = datetime.fromtimestamp(current['sys']['sunrise'], KST).strftime("%H:%M")
-    sunset = datetime.fromtimestamp(current['sys']['sunset'], KST).strftime("%H:%M")
-
-    # 바람 및 대기
-    pressure = current['main']['pressure']
-    humidity = current['main']['humidity']
-    wind_speed = current['wind']['speed']
-    wind_deg = current['wind'].get('deg', 0)
-    
-    # 풍향 각도를 방위로 변환
-    dirs = ["북풍", "북북동풍", "북동풍", "동북동풍", "동풍", "동남동풍", "남동풍", "남남동풍", 
-            "남풍", "남남서풍", "남서풍", "서남서풍", "서풍", "서북서풍", "북서풍", "북북서풍"]
-    wind_dir_str = dirs[int((wind_deg + 11.25) / 22.5) % 16]
-
-    # 미세먼지 등급
-    aqi = air['list'][0]['main']['aqi']
-    aqi_text_map = {1: "좋음", 2: "양호", 3: "보통", 4: "나쁨", 5: "매우 나쁨"}
-    dust_status = aqi_text_map.get(aqi, "보통")
-
-    # 시간대별 상세 정보 생성 (아침 8시, 점심 13시, 저녁 18시 기준)
-    morning_info = get_detailed_time_forecast(forecast.get('list', []), 8)
-    noon_info = get_detailed_time_forecast(forecast.get('list', []), 13)
-    evening_info = get_detailed_time_forecast(forecast.get('list', []), 18)
-
-    # 우천 정보 및 바다 정보 생성
-    rain_summary = get_rain_summary(forecast.get('list', []))
-    tide_summary = get_tide_info()
-
-    # 최종 메시지 조합
-    msg = f"""[Ulsan 오늘 날씨 ⛅]
-{time_str}
-
-📅 날짜: {date_str}
-🌅 일출 : {sunrise}
-🌇 일몰 : {sunset}
-☁️ 현재 하늘 상태 : {weather_desc}
-
-[🌡️ 기온 정보]
-📍 현재 기온: {temp:.2f}°C
-📊 오늘 최저/최고: {temp_min:.2f}°C / {temp_max:.2f}°C
-🔄 어제와 비교: 📈 비슷해요
-😷 미세먼지: ({dust_status})"""
-
-[☔ 우천 정보]
-{rain_summary}
-
-[🥪 아침/점심/저녁]
-  🌅 아침: {morning_info}
-  ☀️ 점심: {noon_info}
-  🌙 저녁: {evening_info}
-
-[🔬 바람과 바다]
-🗜️ 기압 : {pressure} hPa
-💧 대기습도 : {humidity} %
-💨 풍속 : {wind_speed} m/s
-🧭 풍향 : {wind_deg}° ({wind_dir_str})
-
-[울산 바다 정보]
-{tide_summary}
-
-
-    return msg
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-    requests.post(url, json=payload)
-
-if __name__ == "__main__":
-    cur, fore, air = get_weather_data()
-    message = format_message(cur, fore, air)
-    send_telegram(message)
+        item_time_utc = datetime.fromtimestamp(
