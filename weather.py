@@ -204,6 +204,7 @@ def format_message(loc_name, current, forecast, air):
         f"🔄 어제와 비교: 📈 비슷해요",
         f"😷 미세먼지: ({dust_status})"
         "",
+        "",
         f"[☔ 우천 정보]",
         f"{rain_summary}",
         "",
