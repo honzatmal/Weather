@@ -1,18 +1,12 @@
-name: Telegram Weather Bot
+name: Daily Weather Bot
 
 on:
   schedule:
-    - cron: '0 21 * * *' # 매일 정해진 시간에 자동 실행 (예: UTC 기준 아침/밤)
-  workflow_dispatch:
-    inputs:
-      city:
-        description: '조회할 지역 이름 (예: Seoul, Ulsan, Busan)'
-        required: true
-        default: 'Ulsan'
-        type: string
+    - cron: '0 21 * * *' # 매일 아침 6시 (KST 기준) 자동 실행
+  workflow_dispatch: # 수동으로도 실행 가능
 
 jobs:
-  run-weather:
+  send-weather:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -30,5 +24,5 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          INPUT_CITY: ${{ inputs.city }} # 수동 입력된 지역값 전달 (기본값 설정 시 자동 실행용)
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
         run: python weather.py
